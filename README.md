@@ -1,179 +1,168 @@
-# Custom Claude Skills
+# Claude Skills — Mini Documentation
 
-A collection of custom skills for Claude that enhance its capabilities in specific workflows and interaction patterns.
+> **TL;DR:** A Skill is a folder with a `SKILL.md` file that teaches Claude a repeatable workflow. Claude only reads the full file when the task matches, so keeping many skills installed is cheap.
+
+---
 
 ## What are Claude Skills?
 
-Claude skills are structured instruction sets that teach Claude how to handle specific types of tasks more effectively. Each skill is a markdown file that triggers automatically when relevant and guides Claude through optimized workflows.
+Claude Skills (also called Agent Skills) are a feature by Anthropic that lets users package repeatable workflows, instructions, reference materials, and optional executable scripts into discoverable folders that Claude can load on demand.
 
-## Skills in this Repository
+The central design idea is **progressive disclosure**: Claude is told only the name and one-line description of every installed Skill at the start of a session, then reads the full `SKILL.md` only when the user's request matches, and only opens additional bundled files (templates, references, scripts) when a step actually needs them.
 
-### 🔧 bash-error-diagnose
-
-**Purpose:** Systematic debugging of bash command failures through iterative diagnosis.
-
-**Triggers:** When a user reports errors from terminal commands Claude provided.
-
-**What it does:**
-- Runs structured diagnosis using real output from the user's machine
-- Iteratively collects data before suggesting fixes (never guesses)
-- Confirms fixes work after implementation
-- Handles permission issues, service failures, port conflicts, and more
-
-**Use case example:** User runs `systemctl start nginx` and gets an error → Claude diagnoses step-by-step using targeted commands instead of guessing.
+Skills were released as an **open standard** in December 2025 — portable across tools and platforms. The same skill can work whether you're using Claude or other AI platforms.
 
 ---
 
-### 💡 brainstorming
+## Anatomy of a Skill
 
-**Purpose:** Structured idea generation using proven techniques.
-
-**Triggers:** "help me think of", "I need ideas", "brainstorm", "what are some options", or any open-ended problem needing creative exploration.
-
-**What it does:**
-- Selects appropriate brainstorming technique (Classic Divergence, SCAMPER, Reverse Brainstorming, How Might We, Forced Connections, Six Thinking Hats)
-- Generates categorized ideas: core, unconventional, quick wins
-- Tailors output to constraints (time, budget, technical complexity)
-- Offers next-step iterations: expand specific ideas, stress-test top options, or reframe the problem
-
-**Use case example:** "Help me think of ways to monetize my side project" → generates structured ideas across practical, unconventional, and quick-win categories.
-
----
-
-### 🏛️ council
-
-**Purpose:** Multi-perspective adversarial debate using expert personas.
-
-**Triggers:** "council mode", "debate this", "devil's advocate", "argue all sides", or high-stakes decisions needing thorough vetting.
-
-**What it does:**
-- Assembles 4-8 expert personas with distinct lenses (Pragmatist, Skeptic, Visionary, Risk Officer, plus unusual characters like Hans the German Overengineer, The Lunatic, The Chaos Monkey)
-- Runs structured debate rounds: opening positions, cross-examination, synthesis, vote
-- Delivers a verdict with consensus level, reasoning, minority views, and risk factors
-- All personas maintain factual accuracy while bringing unique perspectives
-
-**Use case example:** "Should I switch from Python to Rust for my backend?" → Council debates from performance, maintainability, team knowledge, hiring, and ecosystem perspectives before delivering a verdict.
-
----
-
-### ⏯️ resume-interrupted
-
-**Purpose:** Continue Claude responses that were cut off or interrupted mid-generation.
-
-**Triggers:** "resume", "continue from where you stopped", "response got cut off", "retry smartly", or when generation fails.
-
-**What it does:**
-- Reconstructs Claude's original reasoning and planned structure
-- Locates exact interruption point (mid-sentence, mid-section, mid-file)
-- Recovers partially written files without restarting
-- Continues seamlessly in the same style, tone, and format
-- Saves tokens and time by not regenerating completed content
-
-**Use case example:** Claude is generating a 500-line React component, network drops at line 250 → say "resume" and it picks up from line 250 instead of restarting.
-
----
-
-## Installation
-
-### Option 1: Clone the Repository
-
-```bash
-git clone https://github.com/yourusername/claude-custom-skills.git
-cd claude-custom-skills
+```
+my-skill/
+├── SKILL.md        ← Required. Instructions + YAML frontmatter.
+├── scripts/        ← Optional. Executable scripts.
+├── examples/       ← Optional. Sample outputs.
+└── resources/      ← Optional. Reference files.
 ```
 
-Then upload the skill files to your Claude environment according to [Anthropic's skill documentation](https://docs.claude.com).
+**Minimal `SKILL.md`:**
 
-### Option 2: Download Individual Skills
+```yaml
+---
+name: my-skill
+description: Brief one-line description for skill discovery (keep concise)
+---
 
-Browse to the skill you want and download its `SKILL.md` file directly.
+# Instructions
+
+Detailed instructions Claude follows when this skill activates.
+```
+
+The `description` field is critical — it's what Claude uses to decide whether to auto-load the skill.
 
 ---
 
-## How to Use
+## How to Use Skills
 
-1. **Upload skills** to your Claude skills directory (typically `/mnt/skills/user/` in Claude environments that support custom skills)
-2. **Skills trigger automatically** when Claude detects relevant patterns in your requests
-3. **No special commands needed** — just interact naturally. For example:
-   - Run a command, get an error, paste it → bash-error-diagnose triggers
-   - Say "I need ideas for X" → brainstorming triggers
-   - Say "debate whether I should do X" → council triggers
-   - Response gets cut off, say "resume" → resume-interrupted triggers
+### Claude Code (Terminal)
+
+Where you store a skill determines who can use it:
+
+| Scope      | Path                                       |
+|------------|--------------------------------------------|
+| Personal   | `~/.claude/skills/<skill-name>/SKILL.md`   |
+| Project    | `.claude/skills/<skill-name>/SKILL.md`     |
+| Enterprise | Managed via org settings                   |
+
+**Install a skill:**
+```bash
+mkdir -p ~/.claude/skills/my-skill
+# create SKILL.md inside it
+```
+
+**Use a skill:**
+```bash
+# Direct invocation
+/my-skill
+
+# Or just describe your task — Claude auto-invokes if description matches
+```
+
+**Bundled skills** (available in every session): `/code-review`, `/batch`, `/debug`, `/loop`, `/claude-api`, `/run`, `/verify`.
+
+Claude Code **watches skill directories live** — adding or editing a skill takes effect in the current session without restarting.
 
 ---
 
-## Skill Structure
+### Claude.ai (Web/App)
 
-Each skill follows this format:
+Upload skills via **Settings → Capabilities → Skills**.
+
+Skills you upload are available across your conversations. Claude auto-activates them when your request matches the skill's description, or you can reference them directly.
+
+---
+
+### Claude API
+
+Use `client.beta.messages.create()` with a `container.skills` parameter:
+
+```python
+response = client.beta.messages.create(
+    model="claude-sonnet-4-6",
+    max_tokens=1000,
+    container={
+        "skills": [
+            {"type": "anthropic", "skill_id": "xlsx", "version": "latest"}
+        ]
+    },
+    tools=[{"type": "code_execution_20250825", "name": "code_execution"}],
+    messages=[{"role": "user", "content": "Create an Excel report..."}],
+    betas=["code-execution-2025-08-25", "files-api-2025-04-14", "skills-2025-10-02"]
+)
+```
+
+Anthropic provides first-party skill IDs for common tasks: `xlsx`, `pdf`, `pptx`, `docx`, etc.
+
+---
+
+### Cowork (Desktop)
+
+Skills placed in the project directory (`.claude/skills/`) are picked up automatically when Cowork operates on that folder. No extra configuration needed — it follows the same path resolution as Claude Code.
+
+---
+
+## Key Frontmatter Fields
+
+```yaml
+---
+name: deploy                         # Skill name / slash command
+description: Deploy app to prod      # One-liner for auto-discovery
+context: fork                        # "inline" (default) or "fork" (subagent)
+disable-model-invocation: true       # Prevent Claude from auto-triggering
+---
+```
+
+| Field | Purpose |
+|-------|---------|
+| `description` | Tells Claude when to auto-load this skill |
+| `context: fork` | Run in a subagent (isolated context) |
+| `disable-model-invocation` | Only invocable by you via `/skill-name` |
+
+---
+
+## Dynamic Context Injection
+
+Inject live shell output into skill instructions:
 
 ```markdown
----
-name: skill-name
-description: When this skill triggers and what it does
----
+## Current git diff
 
-# Skill Title
+!`git diff HEAD`
 
-[Detailed instructions for how Claude should execute this skill]
+## Instructions
+Summarize the changes above...
 ```
 
-The `description` field is critical — it defines the trigger patterns that activate the skill.
+Claude Code runs the backtick command and inlines the output before Claude reads the skill.
 
 ---
 
-## Contributing
+## Skill Priority (when names conflict)
 
-Found a bug? Have an improvement? Want to add a new skill?
-
-1. Fork this repository
-2. Create a feature branch (`git checkout -b feature/improved-debugging`)
-3. Make your changes
-4. Test the skill with Claude
-5. Submit a pull request with:
-   - Clear description of what changed
-   - Example interactions showing the skill working
-   - Any new trigger patterns added
+```
+Enterprise > Personal (~/.claude) > Project (.claude/) > Plugin
+```
 
 ---
 
-## Tips for Creating Your Own Skills
+## Quick Reference
 
-1. **Narrow the trigger scope** — overly broad triggers cause unwanted activation
-2. **Make instructions concrete** — "use 3-5 diagnosis commands" is clearer than "diagnose thoroughly"
-3. **Include examples** — showing Claude what good output looks like improves consistency
-4. **Test edge cases** — what happens if the user's input is malformed or incomplete?
-5. **Maintain factual accuracy** — skills can guide style and process, but never compromise truthfulness
-
----
-
-## Known Limitations
-
-- Skills work best in Claude environments with extended thinking capabilities
-- Trigger patterns may need tuning based on your usage patterns
-- Very complex multi-skill workflows may require explicit skill selection
+| Tool | Install path | Invoke |
+|------|-------------|--------|
+| Claude Code | `~/.claude/skills/<name>/SKILL.md` | `/name` or auto |
+| Claude.ai | Settings → Capabilities → Skills | Auto |
+| Claude API | `container.skills` param | Per request |
+| Cowork | `.claude/skills/<name>/SKILL.md` | Auto |
 
 ---
 
-## License
-
-MIT License - see [LICENSE](LICENSE) file for details.
-
----
-
-## Acknowledgments
-
-Skills inspired by real-world Claude usage patterns and community feedback. Special thanks to users who identified workflow gaps that these skills address.
-
----
-
-## Questions?
-
-- **How do I know which skill triggered?** Look for structured output patterns (e.g., council shows "🏛️ COUNCIL ASSEMBLED")
-- **Can I modify these?** Yes! Fork and adapt to your needs.
-- **Do skills work with Claude API?** Skills are designed for Claude.ai environments with custom skill support.
-
----
-
-**Version:** 1.0  
-**Last Updated:** May 2026  
-**Maintained by:** [Ruthvik-Anne]
+**Official docs:** [code.claude.com/docs/en/skills](https://code.claude.com/docs/en/skills) · **Open standard:** [agentskills.io](https://agentskills.io) · **Community skills:** [github.com/travisvn/awesome-claude-skills](https://github.com/travisvn/awesome-claude-skills)
